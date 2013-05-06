@@ -104,6 +104,7 @@ class GitHubPostCommitHook(GitHubMixin, Component):
 
         rm = RepositoryManager(self.env)
         reponame, repos, path = rm.get_repository_by_path(path)
+        branches = self.get_branches(reponame)
 
         if path != '/':
             msg = u'No such repository (%s)\n' % path
@@ -112,12 +113,15 @@ class GitHubPostCommitHook(GitHubMixin, Component):
 
         output = u'Running hook on %s\n' % (reponame or '(default)')
 
-        output += u'* Updating clone\n'
         try:
             git = repos.git.repo             # GitRepository
         except AttributeError:
             git = repos.repos.git.repo       # GitCachedRepository
-        git.remote('update', '--prune')
+
+        # Fetch specified branches only
+        for branch in branches:
+            output += u'* Updating branch {0}\n'
+            git.fetch('origin', '{0}:{0}'.format(branch))
 
         # Ensure that repos.get_changeset can find the new changesets.
         output += u'* Synchronizing with clone\n'
@@ -132,7 +136,6 @@ class GitHubPostCommitHook(GitHubMixin, Component):
             self.log.warning(msg.rstrip('\n'))
             req.send(msg.encode('utf-8'), 'text/plain', 400)
 
-        branches = self.get_branches(reponame)
         added, skipped, unknown = classify_commits(revs, repos, branches)
 
         if added:
